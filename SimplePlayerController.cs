@@ -1,4 +1,5 @@
 using System;
+using Gravity;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -8,28 +9,32 @@ namespace Controllers
     public class PlayerController : MonoBehaviour
     {
         [Header("References")]
-        // public Transform playerCamera;
+        private Rigidbody _rb;
+        private Camera _camera;
         
         [Header("Movement")]
         public float moveSpeed = 5f;
         public float jumpForce = 5f;
 
         [Header("Mouse Settings")]
-        public float mouseSensitivity = 200f;
-        public Vector2 pitchMinMax = new Vector2(-40, 85);
-
+        public float mouseSensitivity = 1f;
+        public Vector2 pitchMinMax = new(-40, 85);
+        public float cameraSmooth = 0.3f;
+        
         [Header("Input")]
         public InputActionAsset inputActions;
         private InputAction _moveAction;
         private InputAction _lookAction;
         private InputAction _jumpAction;
-    
-        private Rigidbody _rb;
-        private Camera _camera;
-        private float _verticalLookRotation;
+
+        private float _targetPitch;
+        private float _pitch;
+        private float _pitchV;
+        
+        private float _yaw;
         private bool _isGrounded;
     
-        [Header("Debug")]
+        // Testing
         private Vector3 _initPosition;
         private InputAction _resetActionD;
     
@@ -61,20 +66,24 @@ namespace Controllers
         private void Start()
         {
             _rb.freezeRotation = true;
-
             Cursor.lockState = CursorLockMode.Locked;
+            
+            _initPosition = transform.position;
         }
 
         private void Update()
         {
             HandleMouseLook();
-            if (_jumpAction.WasPressedThisFrame()) { HandleJump(); }
+            if(_jumpAction.WasPressedThisFrame()) { HandleJump(); }
+            if(_resetActionD.WasPressedThisFrame()) { ResetPlayer(); }
         }
 
         private void FixedUpdate()
         {
             HandleMovement();
         }
+
+        #region InputAndMovement
 
         private void HandleMouseLook()
         {
@@ -83,13 +92,14 @@ namespace Controllers
             // yaw (rotate transform)
             transform.Rotate(Vector3.up * lookAmt.x);
 
-            // pitch (rotate camera)
-            _verticalLookRotation -= lookAmt.y;
-            _verticalLookRotation = Mathf.Clamp(_verticalLookRotation, pitchMinMax.x, pitchMinMax.y);
+            // pitch (rotate camera) - use negative so not inverted
+            _targetPitch -= lookAmt.y;
+            _targetPitch = Mathf.Clamp(_targetPitch, pitchMinMax.x, pitchMinMax.y);
+            _pitch = Mathf.SmoothDampAngle(_pitch, _targetPitch, ref _pitchV, cameraSmooth);
 
-            _camera.transform.localRotation = Quaternion.Euler(_verticalLookRotation, 0f, 0f);
+            _camera.transform.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
         }
-
+        
         private void HandleMovement()
         {
             var moveAmt = _moveAction.ReadValue<Vector2>() * mouseSensitivity;
@@ -116,5 +126,20 @@ namespace Controllers
                 _rb.AddForce(Vector3.up * jumpForce, ForceMode.VelocityChange);
             }
         }
+        
+        #endregion
+        
+        #region Testing
+
+        private void ResetPlayer()
+        {
+            if (!_resetActionD.WasPressedThisFrame()) return;
+            
+            transform.position = _initPosition;
+            transform.rotation = Quaternion.identity;
+            _rb.linearVelocity = Vector3.zero;
+        }
+
+        #endregion 
     }
 }
